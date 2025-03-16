@@ -1,0 +1,7 @@
+**/Objects
+**/AutoBackups
+**/ModuleArchive
+*.meta
+*.zip
+*.mp4
+Mainfest.txt

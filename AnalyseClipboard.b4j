@@ -1,0 +1,171 @@
+﻿AppType=JavaFX
+Build1=Default,b4j.example
+File1=Layout1.bjl
+File2=Left.bjl
+File3=Right.bjl
+FileGroup1=Default Group
+FileGroup2=Default Group
+FileGroup3=Default Group
+Group=Default Group
+Library1=javaobject
+Library2=jcore
+Library3=jfx
+Library4=jxui
+Library5=xui views
+NumberOfFiles=3
+NumberOfLibraries=5
+NumberOfModules=0
+Version=9.45
+@EndOfDesignText@
+#Region Project Attributes 
+	#MainFormWidth: 900
+	#MainFormHeight: 600 
+#End Region
+'#JavaCompilerPath: 8,C:\Java\jdk1.8.0_271\bin\
+Sub Process_Globals
+	Private fx As JFX
+	Private MainForm As Form
+	Private xui As XUI 
+
+	Private SplitPane1 As SplitPane
+	Private btnAnalyse As B4XView
+	Private WebView1 As WebView
+	Private ImageView1 As ImageView
+	Private TextArea1 As TextArea
+	Private ListView1 As ListView
+	Dim Clipboard As JavaObject
+	Private Dialog As B4XDialog
+	Private TextField1 As B4XView
+	Private cbTryAsText As B4XView
+End Sub
+
+#If Release
+'	#CustomBuildAction: 2, c:\windows\system32\cmd.exe, /c mkdir C:\NoinstApps\B4j\AnalyseClipboard
+	#CustomBuildAction: 2, c:\windows\system32\cmd.exe, /c copy AnalyseClipboard.jar C:\NoinstApps\B4j\AnalyseClipboard\AnalyseClipboard.jar
+#End If
+
+Sub AppStart (Form1 As Form, Args() As String)
+	MainForm = Form1
+	MainForm.RootPane.LoadLayout("Layout1")
+	
+	Dialog.Initialize(MainForm.RootPane)
+	
+	SplitPane1.LoadLayout("Left")
+	SplitPane1.LoadLayout("Right")
+	
+	SplitPane1.DividerPositions = Array As Double(0.66)
+	MainForm.Show
+	
+End Sub
+
+
+Private Sub btnAnalyse_Click
+	
+	Clipboard.InitializeStatic("javafx.scene.input.Clipboard")
+	Clipboard = Clipboard.RunMethod("getSystemClipboard",Null)
+	
+	ListView1.Items.Clear
+	
+	
+	Dim Set As JavaObject = Clipboard.RunMethod("getContentTypes",Null)
+
+	Dim Arr() As Object = Set.RunMethod("toArray",Null)
+
+	Dim L As List = Arr
+		
+	For Each DF As JavaObject In L
+		Dim Set1 As JavaObject = DF.RunMethod("getIdentifiers",Null)
+		Dim Arr() As Object = Set1.RunMethod("toArray",Null)
+		For Each S As String In Arr
+			Log(S)
+			ListView1.Items.Add(S)
+		Next
+	Next
+	
+End Sub
+
+Private Sub TextArea1_Action
+	Dim MI As MenuItem = Sender
+	If MI.Text = "Ascii" Then
+		Log(TextArea1.SelectionStart)
+		Log(TextArea1.SelectionEnd)
+		If TextArea1.SelectionStart = TextArea1.SelectionEnd Then
+			TextField1.Text = "No text selected"
+			Return
+		End If
+		Dim Str As String = TextArea1.Text.SubString2(TextArea1.SelectionStart,TextArea1.SelectionEnd)
+		TextField1.Text =  "Ascii Code is " & Asc(Str)
+	End If
+End Sub
+
+Private Sub ListView1_SelectedIndexChanged(Index As Int)
+	WebView1.LoadHtml("")
+	TextArea1.Text = ""
+	
+	If Index = -1 Then Return
+	Dim ContentType As String = ListView1.Items.Get(Index)
+'	Dim DF As JavaObject
+'	DF.InitializeNewInstance("javafx.scene.input.DataFormat",Array(Array As String(ContentType)))
+	
+'	If Clipboard.RunMethod("hasContent",Array(DF)) Then
+	Dim DFmt As JavaObject
+	DFmt.InitializeStatic("javafx.scene.input.DataFormat")
+	Dim DF As JavaObject = DFmt.RunMethod("lookupMimeType",Array(ContentType))
+	Dim NoViewer As Boolean
+
+	TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+	
+	If DF.IsInitialized = False Then
+		Wait For(Dialog.Show($"Cannot determine dataformat for ${ContentType}"$,"OK","","")) Complete (Resp As Int)
+		Return
+	End If
+	Log("CT " & ContentType)
+	Select ContentType
+		Case "text/plain"
+			If DF.IsInitialized = False Then
+				DF = DFmt.GetField("PLAIN_TEXT")
+			End If
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "System.String"
+			If DF.IsInitialized = False Then
+				DF = DFmt.GetField("PLAIN_TEXT")
+			End If
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "text/rtf"
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "RTF As Text"
+			If DF.IsInitialized = False Then
+				DF = DFmt.GetField("PLAIN_TEXT")
+			End If
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "RTF in UTF8"
+			If DF.IsInitialized = False Then
+				DF = DFmt.GetField("PLAIN_TEXT")
+			End If
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "text/uri-list"
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+		Case "PNG"
+			NoViewer = True
+		Case "text/html"
+			WebView1.As(B4XView).BringToFront
+			WebView1.LoadHtml(Clipboard.RunMethod("getContent",Array(DF)))
+		Case "application/x-java-rawimage"
+			ImageView1.As(B4XView).BringToFront
+			ImageView1.SetImage(Clipboard.RunMethod("getContent",Array(DF)))
+		Case "cf17"
+			NoViewer = True
+		Case Else
+			NoViewer = True
+	End Select
+	If NoViewer Then
+		Wait For(Dialog.Show($"Cannot display content ${ContentType}"$,"OK","","")) Complete (Resp As Int)
+	End If
+'	End If
+'	End If
+	
+End Sub
+
+Private Sub cbTryAsText_CheckedChange(Checked As Boolean)
+	ListView1.SelectedIndex = -1
+End Sub
