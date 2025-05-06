@@ -1,27 +1,43 @@
 ﻿AppType=JavaFX
-Build1=Default,b4j.example
-File1=Layout1.bjl
-File2=Left.bjl
-File3=Right.bjl
+Build1=Default,com.stevel05.analyseclipboard
+File1=hv.bjl
+File2=Layout1.bjl
+File3=Left.bjl
+File4=Right.bjl
 FileGroup1=Default Group
 FileGroup2=Default Group
 FileGroup3=Default Group
+FileGroup4=Default Group
 Group=Default Group
 Library1=javaobject
 Library2=jcore
 Library3=jfx
-Library4=jxui
-Library5=xui views
-NumberOfFiles=3
-NumberOfLibraries=5
-NumberOfModules=0
-Version=9.45
+Library4=jhexviewer-b4x
+Library5=jokhttputils2
+Library6=jrandomaccessfile
+Library7=jxui
+Library8=webp
+Library9=xui views
+Module1=|absolute|D:\AnywhereSoftware\B4j\aaaIDELinks\aaaIDElinks
+Module2=HexViewForm
+Module3=LogU
+NumberOfFiles=4
+NumberOfLibraries=9
+NumberOfModules=3
+Version=10.2
 @EndOfDesignText@
 #Region Project Attributes 
 	#MainFormWidth: 900
 	#MainFormHeight: 600 
 #End Region
-'#JavaCompilerPath: 8,C:\Java\jdk1.8.0_271\bin\
+
+#PackagerProperty: IncludedModules = javafx.web
+#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, ..\Objects\b4xlibs\Files temp\build\bin\ webp.dll
+
+'My specific Actions
+#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, /MIR temp\build\ C:\noinst\B4j\analyseClipboard
+
+
 Sub Process_Globals
 	Private fx As JFX
 	Private MainForm As Form
@@ -33,20 +49,24 @@ Sub Process_Globals
 	Private ImageView1 As ImageView
 	Private TextArea1 As TextArea
 	Private ListView1 As ListView
-	Dim Clipboard As JavaObject
+	Private Clipboard As JavaObject
 	Private Dialog As B4XDialog
-	Private TextField1 As B4XView
-	Private cbTryAsText As B4XView
+	Private lblStatus As B4XView
+	Private DataFormat As JavaObject
+	Private RegisteredFormats As Map
+	Private IVWidth As Double = 300
+	Private IVHeight As Double = 200
+	Private taLog As B4XView
+	Private ScrollPane1 As ScrollPane
+	Private HvForm As HexViewForm
 End Sub
 
-#If Release
-'	#CustomBuildAction: 2, c:\windows\system32\cmd.exe, /c mkdir C:\NoinstApps\B4j\AnalyseClipboard
-	#CustomBuildAction: 2, c:\windows\system32\cmd.exe, /c copy AnalyseClipboard.jar C:\NoinstApps\B4j\AnalyseClipboard\AnalyseClipboard.jar
-#End If
 
 Sub AppStart (Form1 As Form, Args() As String)
 	MainForm = Form1
 	MainForm.RootPane.LoadLayout("Layout1")
+	
+	MainForm.Title = "Analyse Clipboard"
 	
 	Dialog.Initialize(MainForm.RootPane)
 	
@@ -56,6 +76,47 @@ Sub AppStart (Form1 As Form, Args() As String)
 	SplitPane1.DividerPositions = Array As Double(0.66)
 	MainForm.Show
 	
+	HvForm.Initialize
+	
+	
+	ImageView1.RemoveNodeFromParent
+	ScrollPane1.InnerNode = ImageView1
+	ScrollPane1.FitToHeight = True
+	ScrollPane1.FitToWidth = True
+	
+	DataFormat.InitializeStatic("javafx.scene.input.DataFormat")
+	
+	RegisteredFormats.Initialize
+	Dim DFI As JavaObject
+	DFI.InitializeStatic("javafx.scene.input.DataFormat")
+	Dim DataFormats As List = Array("FILES","HTML","IMAGE","PLAIN_TEXT","RTF","URL")
+	
+	For Each DF As String In DataFormats
+		RegisteredFormats.Put(DF,DFI.GetField(DF))
+	Next
+	
+	
+	Dim Divider1PosProp As JavaObject = SplitPane1.As(JavaObject).RunMethodJO("getDividers",Null).RunMethodJO("get", Array(0)).RunMethod("positionProperty",Null)
+	Dim O As Object = Divider1PosProp.CreateEventFromUI("javafx.beans.value.ChangeListener","Divider1PosPropChanged",Null)
+	Divider1PosProp.RunMethod("addListener",Array(O))
+	
+End Sub
+
+
+Public Sub MainForm_resize(Width As Double, Height As Double)
+	ResizeRight(Width, Height)
+End Sub
+
+Private Sub Divider1PosPropChanged_Event (MethodName As String, Args() As Object)
+	ResizeRight(MainForm.Width,MainForm.Height)
+End Sub
+
+Private Sub ResizeRight(Width As Double, Height As Double)
+	ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
+	Dim RWidth As Double = Width - Width * SplitPane1.DividerPositions(0)
+	ScrollPane1.As(B4XView).SetLayoutAnimated(0,0,0,RWidth,Height)
+	WebView1.As(B4XView).SetLayoutAnimated(0,0,0,RWidth,Height)
+	taLog.SetLayoutAnimated(0,0,0,RWidth,Height)
 End Sub
 
 
@@ -65,7 +126,6 @@ Private Sub btnAnalyse_Click
 	Clipboard = Clipboard.RunMethod("getSystemClipboard",Null)
 	
 	ListView1.Items.Clear
-	
 	
 	Dim Set As JavaObject = Clipboard.RunMethod("getContentTypes",Null)
 
@@ -77,7 +137,6 @@ Private Sub btnAnalyse_Click
 		Dim Set1 As JavaObject = DF.RunMethod("getIdentifiers",Null)
 		Dim Arr() As Object = Set1.RunMethod("toArray",Null)
 		For Each S As String In Arr
-			Log(S)
 			ListView1.Items.Add(S)
 		Next
 	Next
@@ -85,87 +144,223 @@ Private Sub btnAnalyse_Click
 End Sub
 
 Private Sub TextArea1_Action
+	lblStatus.Text = ""
 	Dim MI As MenuItem = Sender
-	If MI.Text = "Ascii" Then
-		Log(TextArea1.SelectionStart)
-		Log(TextArea1.SelectionEnd)
+	If MI.Text = "Selected" Then
+		lblStatus.TextColor = xui.Color_Black
 		If TextArea1.SelectionStart = TextArea1.SelectionEnd Then
-			TextField1.Text = "No text selected"
+			lblStatus.Text = "No text selected"
 			Return
 		End If
 		Dim Str As String = TextArea1.Text.SubString2(TextArea1.SelectionStart,TextArea1.SelectionEnd)
-		TextField1.Text =  "Ascii Code is " & Asc(Str)
+		taLog.Text = LogU.GetStringCharNames(Str)
+		
+	Else If MI.Text = "All Characters" Then
+		taLog.BringToFront
+		taLog.Text = LogU.GetStringCharNames(TextArea1.Text)
+	Else If MI.Text = "Hex View" Then
+		
+		HvForm.Show(TextArea1.Text.GetBytes("UtF-8"))
 	End If
+	
 End Sub
 
 Private Sub ListView1_SelectedIndexChanged(Index As Int)
 	WebView1.LoadHtml("")
 	TextArea1.Text = ""
+	lblStatus.Text = ""
+	taLog.Text = ""
+	ImageView1.SetImage(Null)
 	
 	If Index = -1 Then Return
 	Dim ContentType As String = ListView1.Items.Get(Index)
-'	Dim DF As JavaObject
-'	DF.InitializeNewInstance("javafx.scene.input.DataFormat",Array(Array As String(ContentType)))
-	
-'	If Clipboard.RunMethod("hasContent",Array(DF)) Then
-	Dim DFmt As JavaObject
-	DFmt.InitializeStatic("javafx.scene.input.DataFormat")
-	Dim DF As JavaObject = DFmt.RunMethod("lookupMimeType",Array(ContentType))
+
 	Dim NoViewer As Boolean
 
-	TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
-	
+	Dim DF As JavaObject
+	If RegisteredFormats.ContainsKey(ContentType) Then
+		DF = RegisteredFormats.Get(ContentType)
+	Else
+		Try
+			DF.InitializeNewInstance("javafx.scene.input.DataFormat",Array(Array As String(ContentType)))
+			RegisteredFormats.Put(ContentType,DF)
+		Catch
+			DF = DataFormat.RunMethod("lookupMimeType",Array(ContentType))
+			If DF.IsInitialized Then RegisteredFormats.Put(ContentType, DF)
+		End Try
+	End If
+	 
 	If DF.IsInitialized = False Then
+		Dialog.Title = "Unknown DataFormat"
 		Wait For(Dialog.Show($"Cannot determine dataformat for ${ContentType}"$,"OK","","")) Complete (Resp As Int)
 		Return
 	End If
-	Log("CT " & ContentType)
+	
 	Select ContentType
+
 		Case "text/plain"
 			If DF.IsInitialized = False Then
-				DF = DFmt.GetField("PLAIN_TEXT")
+				DF = DataFormat.GetField("PLAIN_TEXT")
 			End If
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+
 		Case "System.String"
 			If DF.IsInitialized = False Then
-				DF = DFmt.GetField("PLAIN_TEXT")
+				DF = DataFormat.GetField("PLAIN_TEXT")
 			End If
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+
 		Case "text/rtf"
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+
 		Case "RTF As Text"
 			If DF.IsInitialized = False Then
-				DF = DFmt.GetField("PLAIN_TEXT")
+				DF = DataFormat.GetField("PLAIN_TEXT")
 			End If
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+
 		Case "RTF in UTF8"
 			If DF.IsInitialized = False Then
-				DF = DFmt.GetField("PLAIN_TEXT")
+				DF = DataFormat.GetField("PLAIN_TEXT")
 			End If
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+
 		Case "text/uri-list"
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+			If Clipboard.RunMethod("hasUrl",Null) Then
+				Dim URL As String = Clipboard.RunMethod("getUrl",Null)
+				If URL.ToLowerCase.EndsWith(".webp") Then
+					Wait For(Download(URL)) Complete (Data() As Byte)
+					
+					Dim WP As WebP
+					WP.Initialize
+					ScrollPane1.As(B4XView).BringToFront
+					Dim img As Image = WP.LoadWebP(Data)
+					IVWidth = img.Width
+					IVHeight = img.Height
+					ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
+					ImageView1.SetImage(img)
+					Return
+				End If
+				
+				Wait For(Download(URL)) Complete (uContent As Object)
+
+				If uContent Is Image Or GetType(uContent) = "anywheresoftware.b4j.objects.ImageViewWrapper$ImageWrapper" Then
+					ScrollPane1.As(B4XView).BringToFront
+					Dim img As Image
+					If uContent Is Image Then
+						img = uContent
+					Else
+						img = uContent.As(JavaObject).RunMethod("getObject",Null)
+					End If
+					
+					IVWidth = img.Width
+					IVHeight = img.Height
+					ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
+					ImageView1.SetImage(img)
+				End If
+				
+				If uContent Is String And uContent <> "" Then
+					WebView1.As(B4XView).BringToFront
+					WebView1.LoadHtml(uContent)
+				End If
+				
+			Else If Clipboard.RunMethod("hasFiles",Null) Then
+				Try
+					Dim L As List = Clipboard.RunMethod("getFiles",Null)
+					If L.Size > 0 Then
+						Dim URL As String = L.Get(0)
+						Wait For(Download(URL)) Complete (Content As String)
+						If Content <> "" Then
+							WebView1.As(B4XView).BringToFront
+							WebView1.LoadHtml(Content)
+						End If
+					End If
+				Catch
+					Log(LastException)
+				End Try
+				
+			End If
+
 		Case "PNG"
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 			NoViewer = True
+
 		Case "text/html"
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 			WebView1.As(B4XView).BringToFront
 			WebView1.LoadHtml(Clipboard.RunMethod("getContent",Array(DF)))
+
 		Case "application/x-java-rawimage"
-			ImageView1.As(B4XView).BringToFront
-			ImageView1.SetImage(Clipboard.RunMethod("getContent",Array(DF)))
+			ScrollPane1.As(B4XView).BringToFront
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+			If Clipboard.RunMethod("hasImage",Null) Then
+				Try
+				Dim img As Image = Clipboard.RunMethod("getImage",Null)
+				Catch
+					lblStatus.Text = LastException.Message
+					lblStatus.TextColor = xui.Color_Red
+					Return
+				End Try
+				IVWidth = img.Width
+				IVHeight = img.Height
+				If IVWidth = 0 And IVHeight = 0 Then
+					lblStatus.Text = "Image has no dimensions"
+					lblStatus.TextColor = xui.Color_Red
+					Return
+				End If
+				ImageView1.SetImage(img)
+				ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
+			Else
+				lblStatus.Text = "Image not found"
+				lblStatus.TextColor = xui.Color_Red
+			End If
+
 		Case "cf17"
 			NoViewer = True
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 		Case Else
 			NoViewer = True
+			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 	End Select
+	
 	If NoViewer Then
-		Wait For(Dialog.Show($"Cannot display content ${ContentType}"$,"OK","","")) Complete (Resp As Int)
+		lblStatus.Text = $"Cannot display content ${ContentType}"$
+		lblStatus.TextColor = xui.Color_Red
 	End If
-'	End If
-'	End If
 	
 End Sub
 
-Private Sub cbTryAsText_CheckedChange(Checked As Boolean)
-	ListView1.SelectedIndex = -1
+Private Sub Download(Url As String) As ResumableSub
+	Dim Job As HttpJob
+	Dim Content As String
+	Job.Initialize("Job", Me)
+	Job.Download(Url)
+
+	Wait For (Job) JobDone(jj As HttpJob)
+	If Job.Success Then
+		If Url.ToLowerCase.EndsWith(".webp") Then
+			Dim Bytes(Job.GetInputStream.BytesAvailable) As Byte
+			Job.GetInputStream.ReadBytes(Bytes,0,Bytes.Length)
+			Job.Release
+			Return Bytes
+		End If
+		Try
+			Dim Img As Image = Job.GetBitmap
+			If Img.IsInitialized Then 
+				Job.Release
+				Return Img
+			End If
+		Catch
+			Log(LastException)
+		End Try
+		
+		Content = Job.GetString
+	Else
+		Dialog.Title = "Error Loading Page"
+		Wait For(Dialog.Show("Could not get page content for " & Url, "OK","","")) Complete (Resp As Int)
+	End If
+	
+	Job.Release
+	Return Content
 End Sub

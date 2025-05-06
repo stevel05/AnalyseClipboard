@@ -1,7 +1,10 @@
 **/Objects
 **/AutoBackups
 **/ModuleArchive
+**/NoteTaker
+**/B4xLib
 *.meta
 *.zip
 *.mp4
-Mainfest.txt
+Manifest.txt
+aaaIDElinks.bas
