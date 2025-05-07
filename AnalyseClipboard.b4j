@@ -10,6 +10,7 @@ FileGroup3=Default Group
 FileGroup4=Default Group
 Group=Default Group
 Library1=javaobject
+Library10=jbitmapcreator
 Library2=jcore
 Library3=jfx
 Library4=jhexviewer-b4x
@@ -22,7 +23,7 @@ Module1=|absolute|D:\AnywhereSoftware\B4j\aaaIDELinks\aaaIDElinks
 Module2=HexViewForm
 Module3=LogU
 NumberOfFiles=4
-NumberOfLibraries=9
+NumberOfLibraries=10
 NumberOfModules=3
 Version=10.2
 @EndOfDesignText@
@@ -59,6 +60,7 @@ Sub Process_Globals
 	Private taLog As B4XView
 	Private ScrollPane1 As ScrollPane
 	Private HvForm As HexViewForm
+	Private HexBufferMap As Map
 End Sub
 
 
@@ -78,7 +80,6 @@ Sub AppStart (Form1 As Form, Args() As String)
 	
 	HvForm.Initialize
 	
-	
 	ImageView1.RemoveNodeFromParent
 	ScrollPane1.InnerNode = ImageView1
 	ScrollPane1.FitToHeight = True
@@ -95,15 +96,16 @@ Sub AppStart (Form1 As Form, Args() As String)
 		RegisteredFormats.Put(DF,DFI.GetField(DF))
 	Next
 	
-	
 	Dim Divider1PosProp As JavaObject = SplitPane1.As(JavaObject).RunMethodJO("getDividers",Null).RunMethodJO("get", Array(0)).RunMethod("positionProperty",Null)
 	Dim O As Object = Divider1PosProp.CreateEventFromUI("javafx.beans.value.ChangeListener","Divider1PosPropChanged",Null)
 	Divider1PosProp.RunMethod("addListener",Array(O))
 	
+	HexBufferMap.Initialize
+	
 End Sub
 
 
-Public Sub MainForm_resize(Width As Double, Height As Double)
+Public Sub MainForm_Resize(Width As Double, Height As Double)
 	ResizeRight(Width, Height)
 End Sub
 
@@ -137,7 +139,10 @@ Private Sub btnAnalyse_Click
 		Dim Set1 As JavaObject = DF.RunMethod("getIdentifiers",Null)
 		Dim Arr() As Object = Set1.RunMethod("toArray",Null)
 		For Each S As String In Arr
-			ListView1.Items.Add(S)
+			Dim Lbl As Label = XUIViewsUtils.CreateLabel
+			Lbl.Text = S
+			Lbl.TooltipText = S
+			ListView1.Items.Add(Lbl)
 		Next
 	Next
 	
@@ -158,11 +163,16 @@ Private Sub TextArea1_Action
 	Else If MI.Text = "All Characters" Then
 		taLog.BringToFront
 		taLog.Text = LogU.GetStringCharNames(TextArea1.Text)
-	Else If MI.Text = "Hex View" Then
 		
-		HvForm.Show(TextArea1.Text.GetBytes("UtF-8"))
+	Else If MI.Text = "Hex View" Then
+		Dim Selected As String = ListView1.SelectedItem.As(B4XView).Text
+		If HexBufferMap.ContainsKey(Selected) Then
+			HvForm.Show(HexBufferMap.Get(Selected))
+		Else
+			HvForm.Show(TextArea1.Text.GetBytes("UtF-8"))
+		End If
 	End If
-	
+			
 End Sub
 
 Private Sub ListView1_SelectedIndexChanged(Index As Int)
@@ -171,9 +181,10 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 	lblStatus.Text = ""
 	taLog.Text = ""
 	ImageView1.SetImage(Null)
+	HexBufferMap.Clear
 	
 	If Index = -1 Then Return
-	Dim ContentType As String = ListView1.Items.Get(Index)
+	Dim ContentType As String = ListView1.Items.Get(Index).As(B4XView).Text
 
 	Dim NoViewer As Boolean
 
@@ -229,6 +240,9 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 			If Clipboard.RunMethod("hasUrl",Null) Then
 				Dim URL As String = Clipboard.RunMethod("getUrl",Null)
+				
+				If URL.StartsWith("file:") Then Return
+				
 				If URL.ToLowerCase.EndsWith(".webp") Then
 					Wait For(Download(URL)) Complete (Data() As Byte)
 					
@@ -256,6 +270,11 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 					
 					IVWidth = img.Width
 					IVHeight = img.Height
+					If IVWidth = 0 And IVHeight = 0 Then
+						lblStatus.Text = "Downloaded Image has no dimensions"
+						lblStatus.TextColor = xui.Color_Red
+						Return
+					End If
 					ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
 					ImageView1.SetImage(img)
 				End If
@@ -282,10 +301,6 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 				
 			End If
 
-		Case "PNG"
-			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
-			NoViewer = True
-
 		Case "text/html"
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 			WebView1.As(B4XView).BringToFront
@@ -296,7 +311,7 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 			If Clipboard.RunMethod("hasImage",Null) Then
 				Try
-				Dim img As Image = Clipboard.RunMethod("getImage",Null)
+					Dim img As Image = Clipboard.RunMethod("getImage",Null)
 				Catch
 					lblStatus.Text = LastException.Message
 					lblStatus.TextColor = xui.Color_Red
@@ -305,7 +320,7 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 				IVWidth = img.Width
 				IVHeight = img.Height
 				If IVWidth = 0 And IVHeight = 0 Then
-					lblStatus.Text = "Image has no dimensions"
+					lblStatus.Text = "Downloaded Image has no dimensions"
 					lblStatus.TextColor = xui.Color_Red
 					Return
 				End If
@@ -316,12 +331,47 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 				lblStatus.TextColor = xui.Color_Red
 			End If
 
-		Case "cf17"
-			NoViewer = True
-			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
 		Case Else
-			NoViewer = True
-			TextArea1.Text = Clipboard.RunMethod("getContent",Array(DF))
+			Dim ContentObject As Object = Clipboard.RunMethod("getContent",Array(DF))
+			If GetType(ContentObject) = "java.nio.HeapByteBuffer" Then
+				
+				Dim Result() As Byte = getBufferObject(ContentObject)
+				If Result = Null Then
+					TextArea1.Text = "No Content"
+					Return
+				End If
+				If Result.Length = 0 Then
+					TextArea1.Text = ContentObject
+					Return
+				End If
+				HexBufferMap.Put(ContentType, Result)
+
+				Dim img As Image = BytesToImage(Result)
+				
+				If Initialized(img) And img.Width > 0 And img.Height > 0 Then
+					ScrollPane1.As(B4XView).BringToFront
+					IVWidth = img.Width
+					IVHeight = img.Height
+					ImageView1.SetImage(img)
+					ImageView1.SetLayoutAnimated(0,0,0,IVWidth,IVHeight)
+					TextArea1.Text = ContentObject
+					Return
+				End If
+
+				If Result.Length > 100000 Then
+					lblStatus.Text = "Buffer too large"
+					lblStatus.TextColor = xui.Color_Red
+					TextArea1.Text = ContentObject
+				Else				
+				TextArea1.Text = BytesToString(Result,0,Result.Length,"UTF-8")
+				End If
+
+			Else If ContentObject Is String Then
+				TextArea1.Text = ContentObject
+			Else
+				TextArea1.Text = ContentObject
+				NoViewer = True
+			End If
 	End Select
 	
 	If NoViewer Then
@@ -329,6 +379,24 @@ Private Sub ListView1_SelectedIndexChanged(Index As Int)
 		lblStatus.TextColor = xui.Color_Red
 	End If
 	
+End Sub
+
+Public Sub BytesToImage(bytes() As Byte) As Image
+	Dim In As InputStream
+	In.InitializeFromBytesArray(bytes, 0, bytes.Length)
+	Dim bmp As Image
+	bmp.Initialize2(In)
+	In.Close
+	Return bmp
+End Sub
+
+Private Sub getBufferObject(Buffer As Object) As Byte()
+	
+	Buffer.As(JavaObject).RunMethod("rewind",Null)
+	Dim Remaining As Int = Buffer.As(JavaObject).RunMethod("remaining",Null)
+	Dim Content(Remaining) As Byte
+	Buffer.As(JavaObject).RunMethod("get",Array(Content))
+	Return Content
 End Sub
 
 Private Sub Download(Url As String) As ResumableSub
