@@ -23,7 +23,6 @@ Public Sub LoadUserOptions(FilePath As String, FileName As String)
 	Else
 		UserOpts.Initialize
 	End If
-	
 End Sub
 
 Public Sub SaveUserOptions
@@ -55,7 +54,7 @@ Public Sub SaveFormMetrics(F As Form, Delim As String)
 		Return
 	End If
 	Dim FormName As String = F.Title
-	If FormName.Contains(Delim) Then
+	If Delim <> "" And FormName.Contains(Delim) Then
 		FormName = FormName.SubString2(0,FormName.IndexOf(Delim)).Trim
 	End If
 	UserOpts.Put("FormPos" & FormName & "Left",F.WindowLeft)
@@ -66,7 +65,7 @@ End Sub
 
 Public Sub SetFormMetrics(F As Form, Delim As String)
 	Dim FormName As String = F.Title
-	If FormName.Contains(Delim) Then
+	If Delim <> "" And FormName.Contains(Delim) Then
 		FormName = FormName.SubString2(0,FormName.IndexOf(Delim)).Trim
 	End If
 	If UserOpts.ContainsKey("FormPos" & FormName & "Left") Then
