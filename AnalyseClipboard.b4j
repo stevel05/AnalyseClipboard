@@ -22,9 +22,10 @@ Library9=xui views
 Module1=|absolute|D:\AnywhereSoftware\B4j\aaaIDELinks\aaaIDElinks
 Module2=HexViewForm
 Module3=LogU
+Module4=UserOptions
 NumberOfFiles=4
 NumberOfLibraries=10
-NumberOfModules=3
+NumberOfModules=4
 Version=10.2
 @EndOfDesignText@
 #Region Project Attributes 
@@ -33,10 +34,10 @@ Version=10.2
 #End Region
 
 #PackagerProperty: IncludedModules = javafx.web
-#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, ..\Objects\b4xlibs\Files temp\build\bin\ webp.dll
-
-'My specific Actions
-#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, /MIR temp\build\ C:\noinst\B4j\analyseClipboard
+'#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, ..\Objects\b4xlibs\Files temp\build\bin\ webp.dll
+'
+''My specific Actions
+'#CustomBuildAction: After Packager, %WINDIR%\System32\robocopy.exe, /MIR temp\build\ C:\noinst\B4j\analyseClipboard
 
 
 Sub Process_Globals
@@ -61,10 +62,14 @@ Sub Process_Globals
 	Private ScrollPane1 As ScrollPane
 	Private HvForm As HexViewForm
 	Private HexBufferMap As Map
+	Private AppName As String = "AnalyseClipboard"
 End Sub
 
 
 Sub AppStart (Form1 As Form, Args() As String)
+	xui.SetDataFolder(AppName)
+	UserOptions.LoadUserOptions(xui.DefaultFolder,"opts.dat")
+	
 	MainForm = Form1
 	MainForm.RootPane.LoadLayout("Layout1")
 	
@@ -75,7 +80,9 @@ Sub AppStart (Form1 As Form, Args() As String)
 	SplitPane1.LoadLayout("Left")
 	SplitPane1.LoadLayout("Right")
 	
-	SplitPane1.DividerPositions = Array As Double(0.66)
+	Dim L As List = Array(0.66)
+	SplitPane1.DividerPositions = UserOptions.ListToDoubleArray(UserOptions.GetDefault("spdividers",L))
+	
 	MainForm.Show
 	
 	HvForm.Initialize
@@ -104,6 +111,11 @@ Sub AppStart (Form1 As Form, Args() As String)
 	
 End Sub
 
+Public Sub MainForm_CloseRequest (EventData As Event)
+	UserOptions.Put("spdividers", UserOptions.DoubleArrayToList(SplitPane1.DividerPositions))
+	UserOptions.SaveFormMetrics(MainForm,"")
+	UserOptions.SaveUserOptions
+End Sub
 
 Public Sub MainForm_Resize(Width As Double, Height As Double)
 	ResizeRight(Width, Height)
